@@ -48,7 +48,6 @@ func TestLogger_GlobalProvider(t *testing.T) {
 	logger.Info(ctx, "info message", attribute.Bool("success", true))
 	logger.Warn(ctx, "warn message", attribute.Float64("rate", 0.5))
 	logger.Error(ctx, "error message", attribute.String("error", "something bad"))
-	logger.Fatal(ctx, "fatal message", attribute.Int("code", 1))
 
 	// call messages that will be ignored due to the disabled context
 	disabledContext := disableCtx(ctx)
@@ -57,7 +56,6 @@ func TestLogger_GlobalProvider(t *testing.T) {
 	logger.Info(disabledContext, "disabled info message", attribute.Bool("success", true))
 	logger.Warn(disabledContext, "disabled warn message", attribute.Float64("rate", 0.5))
 	logger.Error(disabledContext, "disabled error message", attribute.String("error", "something bad"))
-	logger.Fatal(disabledContext, "disabled fatal message", attribute.Int("code", 1))
 
 	// call methods with large attr counts
 	manyAttrs := createAttrs(6)
@@ -66,7 +64,6 @@ func TestLogger_GlobalProvider(t *testing.T) {
 	logger.Info(ctx, "info many attrs", manyAttrs...)
 	logger.Warn(ctx, "warn many attrs", manyAttrs...)
 	logger.Error(ctx, "error many attrs", manyAttrs...)
-	logger.Fatal(ctx, "fatal many attrs", manyAttrs...)
 
 	recording := recordingProvider.Result()
 
@@ -123,13 +120,6 @@ func TestLogger_GlobalProvider(t *testing.T) {
 			},
 			{
 				Context:    ctx,
-				Severity:   log.SeverityFatal,
-				Body:       log.StringValue("fatal message"),
-				Attributes: []log.KeyValue{testLogAttr, log.Int64("code", 1)},
-				Timestamp:  testTime,
-			},
-			{
-				Context:    ctx,
 				Severity:   log.SeverityTrace,
 				Body:       log.StringValue("trace many attrs"),
 				Attributes: manyLogAttrs,
@@ -160,13 +150,6 @@ func TestLogger_GlobalProvider(t *testing.T) {
 				Context:    ctx,
 				Severity:   log.SeverityError,
 				Body:       log.StringValue("error many attrs"),
-				Attributes: manyLogAttrs,
-				Timestamp:  testTime,
-			},
-			{
-				Context:    ctx,
-				Severity:   log.SeverityFatal,
-				Body:       log.StringValue("fatal many attrs"),
 				Attributes: manyLogAttrs,
 				Timestamp:  testTime,
 			},
@@ -211,7 +194,6 @@ func TestBasicHappyPath_ExplicitProvider(t *testing.T) {
 	logger.Info(ctx, "info message", attribute.Bool("success", true))
 	logger.Warn(ctx, "warn message", attribute.Float64("rate", 0.5))
 	logger.Error(ctx, "error message", attribute.String("error", "something bad"))
-	logger.Fatal(ctx, "fatal message", attribute.Int("code", 1))
 
 	// call messages that will be ignored due to the disabled context
 	disabledContext := disableCtx(ctx)
@@ -220,7 +202,6 @@ func TestBasicHappyPath_ExplicitProvider(t *testing.T) {
 	logger.Info(disabledContext, "disabled info message", attribute.Bool("success", true))
 	logger.Warn(disabledContext, "disabled warn message", attribute.Float64("rate", 0.5))
 	logger.Error(disabledContext, "disabled error message", attribute.String("error", "something bad"))
-	logger.Fatal(disabledContext, "disabled fatal message", attribute.Int("code", 1))
 
 	// call methods with a large attr count
 	manyAttrs := createAttrs(6)
@@ -229,7 +210,6 @@ func TestBasicHappyPath_ExplicitProvider(t *testing.T) {
 	logger.Info(ctx, "info many attrs", manyAttrs...)
 	logger.Warn(ctx, "warn many attrs", manyAttrs...)
 	logger.Error(ctx, "error many attrs", manyAttrs...)
-	logger.Fatal(ctx, "fatal many attrs", manyAttrs...)
 
 	recording := recordingProvider.Result()
 
@@ -286,13 +266,6 @@ func TestBasicHappyPath_ExplicitProvider(t *testing.T) {
 			},
 			{
 				Context:    ctx,
-				Severity:   log.SeverityFatal,
-				Body:       log.StringValue("fatal message"),
-				Attributes: []log.KeyValue{testLogAttr, log.Int64("code", 1)},
-				Timestamp:  testTime,
-			},
-			{
-				Context:    ctx,
 				Severity:   log.SeverityTrace,
 				Body:       log.StringValue("trace many attrs"),
 				Attributes: manyLogAttrs,
@@ -323,13 +296,6 @@ func TestBasicHappyPath_ExplicitProvider(t *testing.T) {
 				Context:    ctx,
 				Severity:   log.SeverityError,
 				Body:       log.StringValue("error many attrs"),
-				Attributes: manyLogAttrs,
-				Timestamp:  testTime,
-			},
-			{
-				Context:    ctx,
-				Severity:   log.SeverityFatal,
-				Body:       log.StringValue("fatal many attrs"),
 				Attributes: manyLogAttrs,
 				Timestamp:  testTime,
 			},
@@ -373,7 +339,6 @@ func TestLogger_With(t *testing.T) {
 	logger.Info(ctx, "info message", attribute.Bool("success", true))
 	logger.Warn(ctx, "warn message", attribute.Float64("rate", 0.5))
 	logger.Error(ctx, "error message", attribute.String("error", "something bad"))
-	logger.Fatal(ctx, "fatal message", attribute.Int("code", 1))
 
 	// call messages that will be ignored due to the disabled context
 	disabledContext := disableCtx(ctx)
@@ -382,7 +347,6 @@ func TestLogger_With(t *testing.T) {
 	logger.Info(disabledContext, "disabled info message", attribute.Bool("success", true))
 	logger.Warn(disabledContext, "disabled warn message", attribute.Float64("rate", 0.5))
 	logger.Error(disabledContext, "disabled error message", attribute.String("error", "something bad"))
-	logger.Fatal(disabledContext, "disabled fatal message", attribute.Int("code", 1))
 
 	// call methods with a large attr count
 	manyAttrs := createAttrs(6)
@@ -391,7 +355,6 @@ func TestLogger_With(t *testing.T) {
 	logger.Info(ctx, "info many attrs", manyAttrs...)
 	logger.Warn(ctx, "warn many attrs", manyAttrs...)
 	logger.Error(ctx, "error many attrs", manyAttrs...)
-	logger.Fatal(ctx, "fatal many attrs", manyAttrs...)
 
 	recording := recordingProvider.Result()
 
@@ -453,13 +416,6 @@ func TestLogger_With(t *testing.T) {
 			},
 			{
 				Context:    ctx,
-				Severity:   log.SeverityFatal,
-				Body:       log.StringValue("fatal message"),
-				Attributes: []log.KeyValue{withLogAttr, log.Int64("code", 1), parentLogAttr},
-				Timestamp:  testTime,
-			},
-			{
-				Context:    ctx,
 				Severity:   log.SeverityTrace,
 				Body:       log.StringValue("trace many attrs"),
 				Attributes: manyLogAttrs,
@@ -490,13 +446,6 @@ func TestLogger_With(t *testing.T) {
 				Context:    ctx,
 				Severity:   log.SeverityError,
 				Body:       log.StringValue("error many attrs"),
-				Attributes: manyLogAttrs,
-				Timestamp:  testTime,
-			},
-			{
-				Context:    ctx,
-				Severity:   log.SeverityFatal,
-				Body:       log.StringValue("fatal many attrs"),
 				Attributes: manyLogAttrs,
 				Timestamp:  testTime,
 			},
@@ -554,7 +503,6 @@ func TestLogger_Child(t *testing.T) {
 	logger.Info(ctx, "info message", attribute.Bool("success", true))
 	logger.Warn(ctx, "warn message", attribute.Float64("rate", 0.5))
 	logger.Error(ctx, "error message", attribute.String("error", "something bad"))
-	logger.Fatal(ctx, "fatal message", attribute.Int("code", 1))
 
 	// call messages that will be ignored due to the disabled context
 	disabledContext := disableCtx(ctx)
@@ -563,7 +511,6 @@ func TestLogger_Child(t *testing.T) {
 	logger.Info(disabledContext, "disabled info message", attribute.Bool("success", true))
 	logger.Warn(disabledContext, "disabled warn message", attribute.Float64("rate", 0.5))
 	logger.Error(disabledContext, "disabled error message", attribute.String("error", "something bad"))
-	logger.Fatal(disabledContext, "disabled fatal message", attribute.Int("code", 1))
 
 	// call methods with a large attr count
 	manyAttrs := createAttrs(6)
@@ -572,7 +519,6 @@ func TestLogger_Child(t *testing.T) {
 	logger.Info(ctx, "info many attrs", manyAttrs...)
 	logger.Warn(ctx, "warn many attrs", manyAttrs...)
 	logger.Error(ctx, "error many attrs", manyAttrs...)
-	logger.Fatal(ctx, "fatal many attrs", manyAttrs...)
 
 	recording := recordingProvider.Result()
 
@@ -646,13 +592,6 @@ func TestLogger_Child(t *testing.T) {
 			},
 			{
 				Context:    ctx,
-				Severity:   log.SeverityFatal,
-				Body:       log.StringValue("fatal message"),
-				Attributes: []log.KeyValue{childLogAttr, log.Int64("code", 1), parentLogAttr},
-				Timestamp:  testTime,
-			},
-			{
-				Context:    ctx,
 				Severity:   log.SeverityTrace,
 				Body:       log.StringValue("trace many attrs"),
 				Attributes: manyLogAttrs,
@@ -683,13 +622,6 @@ func TestLogger_Child(t *testing.T) {
 				Context:    ctx,
 				Severity:   log.SeverityError,
 				Body:       log.StringValue("error many attrs"),
-				Attributes: manyLogAttrs,
-				Timestamp:  testTime,
-			},
-			{
-				Context:    ctx,
-				Severity:   log.SeverityFatal,
-				Body:       log.StringValue("fatal many attrs"),
 				Attributes: manyLogAttrs,
 				Timestamp:  testTime,
 			},

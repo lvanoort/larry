@@ -2,6 +2,7 @@ package larry
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -10,6 +11,7 @@ import (
 )
 
 var timeProvider = time.Now
+var exiter = os.Exit
 
 type Logger struct {
 	// lp is stored on the logger so that we can reuse the parent's LoggerProvider when
@@ -93,10 +95,6 @@ func (o *Logger) Warn(ctx context.Context, msg string, attrs ...attribute.KeyVal
 
 func (o *Logger) Error(ctx context.Context, msg string, attrs ...attribute.KeyValue) {
 	o.log(ctx, log.SeverityError, msg, attrs...)
-}
-
-func (o *Logger) Fatal(ctx context.Context, msg string, attrs ...attribute.KeyValue) {
-	o.log(ctx, log.SeverityFatal, msg, attrs...)
 }
 
 // With returns a logger with the same configuration as this logger, but with additional attributes.
