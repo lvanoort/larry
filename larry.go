@@ -12,6 +12,11 @@ import (
 var timeProvider = time.Now
 
 type Logger struct {
+	// lp is stored on the logger so that we can reuse the parent's LoggerProvider when
+	// creating a child so that it does not have to be re-supplied if a non-global logger
+	// is in-use, which is more intuitive.
+	lp log.LoggerProvider
+
 	parentAttrs [][]attribute.KeyValue
 	logger      log.Logger
 
@@ -61,6 +66,8 @@ func New(name string, opts ...Option) *Logger {
 	}
 
 	l := &Logger{
+		lp: lcfg.lp,
+
 		logger: lcfg.lp.Logger(name, lcfg.loggerOpts...),
 		attrs:  lcfg.childAttrs,
 	}
@@ -102,6 +109,7 @@ func (o *Logger) With(attrs ...attribute.KeyValue) *Logger {
 		parentAttrs = append(parentAttrs, o.attrs)
 	}
 	return &Logger{
+		lp:          o.lp,
 		parentAttrs: parentAttrs,
 		logger:      o.logger,
 		attrs:       attrs,
@@ -111,7 +119,7 @@ func (o *Logger) With(attrs ...attribute.KeyValue) *Logger {
 // Child creates a new logger that will share the attributes from the parent logger.
 func (o *Logger) Child(name string, opts ...Option) *Logger {
 	lcfg := &loggerConfig{
-		lp: global.GetLoggerProvider(),
+		lp: o.lp,
 	}
 	for _, f := range opts {
 		f.apply(lcfg)
@@ -124,6 +132,7 @@ func (o *Logger) Child(name string, opts ...Option) *Logger {
 	}
 
 	l := &Logger{
+		lp:          lcfg.lp,
 		parentAttrs: parentAttrs,
 		logger:      lcfg.lp.Logger(name, lcfg.loggerOpts...),
 		attrs:       lcfg.childAttrs,
