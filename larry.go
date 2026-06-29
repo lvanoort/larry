@@ -12,7 +12,8 @@ import (
 var timeProvider = time.Now
 
 type Logger struct {
-	pro log.Logger
+	parentAttrs [][]attribute.KeyValue
+	logger      log.Logger
 
 	attrs []attribute.KeyValue
 }
@@ -60,8 +61,8 @@ func New(name string, opts ...Option) *Logger {
 	}
 
 	l := &Logger{
-		pro:   lcfg.lp.Logger(name, lcfg.loggerOpts...),
-		attrs: lcfg.childAttrs,
+		logger: lcfg.lp.Logger(name, lcfg.loggerOpts...),
+		attrs:  lcfg.childAttrs,
 	}
 
 	return l
@@ -91,8 +92,48 @@ func (o *Logger) Fatal(ctx context.Context, msg string, attrs ...attribute.KeyVa
 	o.log(ctx, log.SeverityFatal, msg, attrs...)
 }
 
+// With returns a logger with the same configuration as this logger, but with additional attributes.
+// It reuses the logger from the original logger. This should not be confused with Child(), which should be
+// used to create a _new_ logger that inherits the parent's attributes.
+func (o *Logger) With(attrs ...attribute.KeyValue) *Logger {
+	parentAttrs := make([][]attribute.KeyValue, 0, len(o.parentAttrs)+1)
+	parentAttrs = append(parentAttrs, o.parentAttrs...)
+	if len(o.attrs) > 0 {
+		parentAttrs = append(parentAttrs, o.attrs)
+	}
+	return &Logger{
+		parentAttrs: parentAttrs,
+		logger:      o.logger,
+		attrs:       attrs,
+	}
+}
+
+// Child creates a new logger that will share the attributes from the parent logger.
+func (o *Logger) Child(name string, opts ...Option) *Logger {
+	lcfg := &loggerConfig{
+		lp: global.GetLoggerProvider(),
+	}
+	for _, f := range opts {
+		f.apply(lcfg)
+	}
+
+	parentAttrs := make([][]attribute.KeyValue, 0, len(o.parentAttrs)+1)
+	parentAttrs = append(parentAttrs, o.parentAttrs...)
+	if len(o.attrs) > 0 {
+		parentAttrs = append(parentAttrs, o.attrs)
+	}
+
+	l := &Logger{
+		parentAttrs: parentAttrs,
+		logger:      lcfg.lp.Logger(name, lcfg.loggerOpts...),
+		attrs:       lcfg.childAttrs,
+	}
+
+	return l
+}
+
 func (o *Logger) log(ctx context.Context, level log.Severity, msg string, attrs ...attribute.KeyValue) {
-	if !o.pro.Enabled(ctx, log.EnabledParameters{
+	if !o.logger.Enabled(ctx, log.EnabledParameters{
 		Severity: level,
 	}) {
 		return
@@ -102,8 +143,8 @@ func (o *Logger) log(ctx context.Context, level log.Severity, msg string, attrs 
 	rec.SetSeverity(level)
 	rec.SetBody(log.StringValue(msg))
 	rec.SetTimestamp(timeProvider())
-	addAttrsToRecordAdaptive(rec, o.attrs, attrs)
-	o.pro.Emit(ctx, *rec)
+	addAttrsToRecordAdaptive(rec, o.attrs, attrs, o.parentAttrs...)
+	o.logger.Emit(ctx, *rec)
 }
 
 // addAttrsToRecordAdaptive converts the attrs to log.KeyValue and adds them to the record. In theory, it should
@@ -116,21 +157,33 @@ func (o *Logger) log(ctx context.Context, level log.Severity, msg string, attrs 
 // the Logger is not carrying any attributes of its own.
 //
 // see: https://github.com/open-telemetry/opentelemetry-go/issues/7034 for when native attribute support will land
-func addAttrsToRecordAdaptive(rec *log.Record, attrs ...[]attribute.KeyValue) {
-	fullLen := 0
-	for _, attrList := range attrs {
+func addAttrsToRecordAdaptive(rec *log.Record, one, two []attribute.KeyValue, rest ...[]attribute.KeyValue) {
+	fullLen := len(one) + len(two)
+	for _, attrList := range rest {
 		fullLen += len(attrList)
 	}
 
 	if fullLen > 5 {
-		addAttrsToRecordSlice(rec, fullLen, attrs...)
+		addAttrsToRecordSlice(rec, fullLen, one, two, rest...)
 	} else {
-		addAttrsToRecordDirect(rec, attrs...)
+		addAttrsToRecordDirect(rec, one, two, rest...)
 	}
 }
 
-func addAttrsToRecordDirect(rec *log.Record, attrLists ...[]attribute.KeyValue) {
-	for _, attrs := range attrLists {
+func addAttrsToRecordDirect(rec *log.Record, one, two []attribute.KeyValue, rest ...[]attribute.KeyValue) {
+	for _, a := range one {
+		rec.AddAttributes(log.KeyValue{
+			Key:   string(a.Key),
+			Value: log.ValueFromAttribute(a.Value),
+		})
+	}
+	for _, a := range two {
+		rec.AddAttributes(log.KeyValue{
+			Key:   string(a.Key),
+			Value: log.ValueFromAttribute(a.Value),
+		})
+	}
+	for _, attrs := range rest {
 		for _, a := range attrs {
 			rec.AddAttributes(log.KeyValue{
 				Key:   string(a.Key),
@@ -140,11 +193,21 @@ func addAttrsToRecordDirect(rec *log.Record, attrLists ...[]attribute.KeyValue) 
 	}
 }
 
-func addAttrsToRecordSlice(rec *log.Record, fullLen int, attrLists ...[]attribute.KeyValue) {
+func addAttrsToRecordSlice(rec *log.Record, fullLen int, one, two []attribute.KeyValue, rest ...[]attribute.KeyValue) {
 	converted := make([]log.KeyValue, fullLen)
 
 	idx := 0
-	for _, attrList := range attrLists {
+	for _, a := range one {
+		converted[idx].Key = string(a.Key)
+		converted[idx].Value = log.ValueFromAttribute(a.Value)
+		idx++
+	}
+	for _, a := range two {
+		converted[idx].Key = string(a.Key)
+		converted[idx].Value = log.ValueFromAttribute(a.Value)
+		idx++
+	}
+	for _, attrList := range rest {
 		for _, a := range attrList {
 			converted[idx].Key = string(a.Key)
 			converted[idx].Value = log.ValueFromAttribute(a.Value)

@@ -1,4 +1,6 @@
 # larry
+[![Go Reference](https://pkg.go.dev/badge/github.com/lvanoort/larry.svg)](https://pkg.go.dev/github.com/lvanoort/larry)
+
 Larry is a minimal frontend for OpenTelemetry's Log SDK. This is inherently an unstable library because
 logs are only in Beta at the time of writing. This is intentionally a very thin wrapper for the Log SDK
 that just provides typical logging semantics. It has almost no features because the expectation is that any
@@ -12,7 +14,3 @@ level to log with slog only for it to be translated into OTel logs instead of us
 * Remove the attribute.KeyValue -> log.KeyValue translation. This can be done once 
   https://github.com/open-telemetry/opentelemetry-go/issues/7034 is completed and Record gets native support for
   KeyValue
-* Add some mechanism similar to the `With()` method in slog. It is often useful to derive a logger from another 
-  logger and configure it to have some attributes on all log messages it emits. The utility here is obvious, but
-  how to best derive the logger from the new parent is not (should it reuse the backing OTel Logger? create a new 
-  one?)

@@ -338,6 +338,366 @@ func TestBasicHappyPath_ExplicitProvider(t *testing.T) {
 	logtest.AssertEqual(t, want, recording)
 }
 
+func TestLogger_With(t *testing.T) {
+	recordingProvider := logtest.NewRecorder(
+		logtest.WithEnabledFunc(func(ctx context.Context, parameters log.EnabledParameters) bool {
+			return ctx.Value(disabledCtxKey) == nil
+		}),
+	)
+	disableCtx := func(ctx context.Context) context.Context {
+		return context.WithValue(ctx, disabledCtxKey, true)
+	}
+
+	testTime := time.Now().Add(1 * time.Hour)
+	timeProvider = func() time.Time { return testTime }
+	t.Cleanup(func() {
+		timeProvider = time.Now
+	})
+
+	schemaUrl := "https://example.com/testschema"
+	parentAttr := attribute.String("parent.name", t.Name())
+	withAttr := attribute.String("with.name", t.Name())
+
+	ctx := context.Background()
+	parent := New(
+		t.Name(),
+		WithLoggerProvider(recordingProvider),
+		WithLoggerOpts(log.WithSchemaURL(schemaUrl)),
+		WithAttributes(parentAttr),
+	)
+	logger := parent.With(withAttr)
+
+	// call the methods on the With() logger to log messages with a small attr count
+	logger.Trace(ctx, "trace message", attribute.String("key", "trace-val"))
+	logger.Debug(ctx, "debug message", attribute.Int("count", 42))
+	logger.Info(ctx, "info message", attribute.Bool("success", true))
+	logger.Warn(ctx, "warn message", attribute.Float64("rate", 0.5))
+	logger.Error(ctx, "error message", attribute.String("error", "something bad"))
+	logger.Fatal(ctx, "fatal message", attribute.Int("code", 1))
+
+	// call messages that will be ignored due to the disabled context
+	disabledContext := disableCtx(ctx)
+	logger.Trace(disabledContext, "disabled trace message", attribute.String("key", "trace-val"))
+	logger.Debug(disabledContext, "disabled debug message", attribute.Int("count", 42))
+	logger.Info(disabledContext, "disabled info message", attribute.Bool("success", true))
+	logger.Warn(disabledContext, "disabled warn message", attribute.Float64("rate", 0.5))
+	logger.Error(disabledContext, "disabled error message", attribute.String("error", "something bad"))
+	logger.Fatal(disabledContext, "disabled fatal message", attribute.Int("code", 1))
+
+	// call methods with a large attr count
+	manyAttrs := createAttrs(6)
+	logger.Trace(ctx, "trace many attrs", manyAttrs...)
+	logger.Debug(ctx, "debug many attrs", manyAttrs...)
+	logger.Info(ctx, "info many attrs", manyAttrs...)
+	logger.Warn(ctx, "warn many attrs", manyAttrs...)
+	logger.Error(ctx, "error many attrs", manyAttrs...)
+	logger.Fatal(ctx, "fatal many attrs", manyAttrs...)
+
+	recording := recordingProvider.Result()
+
+	// the With() logger emits its own attributes first, then the call-time attributes,
+	// then the parent logger's attributes
+	parentLogAttr := log.String(string(parentAttr.Key), parentAttr.Value.AsString())
+	withLogAttr := log.String(string(withAttr.Key), withAttr.Value.AsString())
+	manyLogAttrs := []log.KeyValue{
+		withLogAttr,
+		log.String("key0", "value0"),
+		log.String("key1", "value1"),
+		log.String("key2", "value2"),
+		log.String("key3", "value3"),
+		log.String("key4", "value4"),
+		log.String("key5", "value5"),
+		parentLogAttr,
+	}
+	// check that all logs are present as expected on recording, with both the parent
+	// and With() attributes included at every log level
+	want := logtest.Recording{
+		logtest.Scope{
+			Name:      t.Name(),
+			SchemaURL: schemaUrl,
+		}: []logtest.Record{
+			{
+				Context:    ctx,
+				Severity:   log.SeverityTrace,
+				Body:       log.StringValue("trace message"),
+				Attributes: []log.KeyValue{withLogAttr, log.String("key", "trace-val"), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityDebug,
+				Body:       log.StringValue("debug message"),
+				Attributes: []log.KeyValue{withLogAttr, log.Int64("count", 42), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityInfo,
+				Body:       log.StringValue("info message"),
+				Attributes: []log.KeyValue{withLogAttr, log.Bool("success", true), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityWarn,
+				Body:       log.StringValue("warn message"),
+				Attributes: []log.KeyValue{withLogAttr, log.Float64("rate", 0.5), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityError,
+				Body:       log.StringValue("error message"),
+				Attributes: []log.KeyValue{withLogAttr, log.String("error", "something bad"), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityFatal,
+				Body:       log.StringValue("fatal message"),
+				Attributes: []log.KeyValue{withLogAttr, log.Int64("code", 1), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityTrace,
+				Body:       log.StringValue("trace many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityDebug,
+				Body:       log.StringValue("debug many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityInfo,
+				Body:       log.StringValue("info many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityWarn,
+				Body:       log.StringValue("warn many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityError,
+				Body:       log.StringValue("error many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityFatal,
+				Body:       log.StringValue("fatal many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+		},
+	}
+	logtest.AssertEqual(t, want, recording)
+}
+
+func TestLogger_Child(t *testing.T) {
+	recordingProvider := logtest.NewRecorder(
+		logtest.WithEnabledFunc(func(ctx context.Context, parameters log.EnabledParameters) bool {
+			return ctx.Value(disabledCtxKey) == nil
+		}),
+	)
+	disableCtx := func(ctx context.Context) context.Context {
+		return context.WithValue(ctx, disabledCtxKey, true)
+	}
+
+	testTime := time.Now().Add(1 * time.Hour)
+	timeProvider = func() time.Time { return testTime }
+	t.Cleanup(func() {
+		timeProvider = time.Now
+	})
+
+	// give the parent and child distinct scopes so we can prove the child uses its own
+	// backing OTel logger rather than reusing the parent's
+	parentName := t.Name() + "/parent"
+	childName := t.Name() + "/child"
+	parentSchemaUrl := "https://example.com/parentschema"
+	childSchemaUrl := "https://example.com/childschema"
+	parentAttr := attribute.String("parent.name", t.Name())
+	childAttr := attribute.String("child.name", t.Name())
+
+	ctx := context.Background()
+	parent := New(
+		parentName,
+		WithLoggerProvider(recordingProvider),
+		WithLoggerOpts(log.WithSchemaURL(parentSchemaUrl)),
+		WithAttributes(parentAttr),
+	)
+	logger := parent.Child(
+		childName,
+		WithLoggerProvider(recordingProvider),
+		WithLoggerOpts(log.WithSchemaURL(childSchemaUrl)),
+		WithAttributes(childAttr),
+	)
+
+	// the parent emits its own message so the recording contains a separate scope,
+	// demonstrating the child does not reuse the parent's backing logger
+	parent.Info(ctx, "parent message", attribute.String("scope", "parent"))
+
+	// call the methods on the child logger to log messages with a small attr count
+	logger.Trace(ctx, "trace message", attribute.String("key", "trace-val"))
+	logger.Debug(ctx, "debug message", attribute.Int("count", 42))
+	logger.Info(ctx, "info message", attribute.Bool("success", true))
+	logger.Warn(ctx, "warn message", attribute.Float64("rate", 0.5))
+	logger.Error(ctx, "error message", attribute.String("error", "something bad"))
+	logger.Fatal(ctx, "fatal message", attribute.Int("code", 1))
+
+	// call messages that will be ignored due to the disabled context
+	disabledContext := disableCtx(ctx)
+	logger.Trace(disabledContext, "disabled trace message", attribute.String("key", "trace-val"))
+	logger.Debug(disabledContext, "disabled debug message", attribute.Int("count", 42))
+	logger.Info(disabledContext, "disabled info message", attribute.Bool("success", true))
+	logger.Warn(disabledContext, "disabled warn message", attribute.Float64("rate", 0.5))
+	logger.Error(disabledContext, "disabled error message", attribute.String("error", "something bad"))
+	logger.Fatal(disabledContext, "disabled fatal message", attribute.Int("code", 1))
+
+	// call methods with a large attr count
+	manyAttrs := createAttrs(6)
+	logger.Trace(ctx, "trace many attrs", manyAttrs...)
+	logger.Debug(ctx, "debug many attrs", manyAttrs...)
+	logger.Info(ctx, "info many attrs", manyAttrs...)
+	logger.Warn(ctx, "warn many attrs", manyAttrs...)
+	logger.Error(ctx, "error many attrs", manyAttrs...)
+	logger.Fatal(ctx, "fatal many attrs", manyAttrs...)
+
+	recording := recordingProvider.Result()
+
+	// the child logger emits its own attributes first, then the call-time attributes,
+	// then the parent logger's attributes
+	parentLogAttr := log.String(string(parentAttr.Key), parentAttr.Value.AsString())
+	childLogAttr := log.String(string(childAttr.Key), childAttr.Value.AsString())
+	manyLogAttrs := []log.KeyValue{
+		childLogAttr,
+		log.String("key0", "value0"),
+		log.String("key1", "value1"),
+		log.String("key2", "value2"),
+		log.String("key3", "value3"),
+		log.String("key4", "value4"),
+		log.String("key5", "value5"),
+		parentLogAttr,
+	}
+	// check that the parent and child each recorded under their own scope, and that the
+	// child's messages include both the parent and child attributes at every log level
+	want := logtest.Recording{
+		logtest.Scope{
+			Name:      parentName,
+			SchemaURL: parentSchemaUrl,
+		}: []logtest.Record{
+			{
+				Context:    ctx,
+				Severity:   log.SeverityInfo,
+				Body:       log.StringValue("parent message"),
+				Attributes: []log.KeyValue{parentLogAttr, log.String("scope", "parent")},
+				Timestamp:  testTime,
+			},
+		},
+		logtest.Scope{
+			Name:      childName,
+			SchemaURL: childSchemaUrl,
+		}: []logtest.Record{
+			{
+				Context:    ctx,
+				Severity:   log.SeverityTrace,
+				Body:       log.StringValue("trace message"),
+				Attributes: []log.KeyValue{childLogAttr, log.String("key", "trace-val"), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityDebug,
+				Body:       log.StringValue("debug message"),
+				Attributes: []log.KeyValue{childLogAttr, log.Int64("count", 42), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityInfo,
+				Body:       log.StringValue("info message"),
+				Attributes: []log.KeyValue{childLogAttr, log.Bool("success", true), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityWarn,
+				Body:       log.StringValue("warn message"),
+				Attributes: []log.KeyValue{childLogAttr, log.Float64("rate", 0.5), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityError,
+				Body:       log.StringValue("error message"),
+				Attributes: []log.KeyValue{childLogAttr, log.String("error", "something bad"), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityFatal,
+				Body:       log.StringValue("fatal message"),
+				Attributes: []log.KeyValue{childLogAttr, log.Int64("code", 1), parentLogAttr},
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityTrace,
+				Body:       log.StringValue("trace many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityDebug,
+				Body:       log.StringValue("debug many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityInfo,
+				Body:       log.StringValue("info many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityWarn,
+				Body:       log.StringValue("warn many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityError,
+				Body:       log.StringValue("error many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+			{
+				Context:    ctx,
+				Severity:   log.SeverityFatal,
+				Body:       log.StringValue("fatal many attrs"),
+				Attributes: manyLogAttrs,
+				Timestamp:  testTime,
+			},
+		},
+	}
+	logtest.AssertEqual(t, want, recording)
+}
+
 func createAttrs(count int) []attribute.KeyValue {
 	result := make([]attribute.KeyValue, count)
 	for idx := range result {
@@ -349,27 +709,44 @@ func createAttrs(count int) []attribute.KeyValue {
 }
 
 func benchAddAttrSlice(b *testing.B, count int) {
-	testAttrs := createAttrs(count)
+	atA := count / 3
+	atB := (count - atA) / 2
+	atC := count - (atA + atB)
+	testAttrsA := createAttrs(atA)
+	testAttrsB := createAttrs(atB)
+	testAttrsC := createAttrs(atC)
 	b.ResetTimer()
 	for b.Loop() {
 		record := &log.Record{}
-		addAttrsToRecordSlice(record, count, testAttrs)
+		addAttrsToRecordSlice(record, count, testAttrsA, testAttrsB, testAttrsC)
 	}
 }
+
 func benchAddAttrDirect(b *testing.B, count int) {
-	testAttrs := createAttrs(count)
+	atA := count / 3
+	atB := (count - atA) / 2
+	atC := count - (atA + atB)
+	testAttrsA := createAttrs(atA)
+	testAttrsB := createAttrs(atB)
+	testAttrsC := createAttrs(atC)
 	b.ResetTimer()
 	for b.Loop() {
 		record := &log.Record{}
-		addAttrsToRecordDirect(record, testAttrs)
+		addAttrsToRecordDirect(record, testAttrsA, testAttrsB, testAttrsC)
 	}
 }
+
 func benchAddAttrAdaptive(b *testing.B, count int) {
-	testAttrs := createAttrs(count)
+	atA := count / 3
+	atB := (count - atA) / 2
+	atC := count - (atA + atB)
+	testAttrsA := createAttrs(atA)
+	testAttrsB := createAttrs(atB)
+	testAttrsC := createAttrs(atC)
 	b.ResetTimer()
 	for b.Loop() {
 		record := &log.Record{}
-		addAttrsToRecordAdaptive(record, testAttrs)
+		addAttrsToRecordAdaptive(record, testAttrsA, testAttrsB, testAttrsC)
 	}
 }
 
